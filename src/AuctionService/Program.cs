@@ -1,7 +1,6 @@
 using AuctionService;
 using AuctionService.Data;
 using AuctionService.Extensions;
-using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);

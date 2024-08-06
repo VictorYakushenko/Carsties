@@ -1,6 +1,7 @@
 ﻿using AuctionService.DTOs;
 using AuctionService.Entities;
 using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuctionService.Extensions;
@@ -9,14 +10,16 @@ public static class RoutesExtensions
 {
     public static void MapRoutes(this IEndpointRouteBuilder endpointRoute)
     {
-        endpointRoute.MapGet("api/auctions", async (AuctionDbContext context, IMapper mapper) =>
+        endpointRoute.MapGet("api/auctions", async (string date, AuctionDbContext context, IMapper mapper) =>
         {
-            var auctions = await context.Auctions
-                .Include(x => x.Item)
-                .OrderBy(x => x.Item.Make)
-                .ToListAsync();
+            var query = context.Auctions.OrderBy(x => x.Item.Make).AsQueryable();
 
-            return mapper.Map<List<AuctionDto>>(auctions);
+            if (!string.IsNullOrEmpty(date))
+            {
+                query = query.Where(x => x.UpdatedAt.CompareTo(DateTime.Parse(date).ToUniversalTime()) > 0);
+            }
+
+            return await query.ProjectTo<AuctionDto>(mapper.ConfigurationProvider).ToListAsync();
         })
         .WithName("GetAllAuctions");
 
