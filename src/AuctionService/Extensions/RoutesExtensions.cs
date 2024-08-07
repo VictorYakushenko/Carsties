@@ -2,6 +2,8 @@
 using AuctionService.Entities;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using Contracts;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuctionService.Extensions;
@@ -35,20 +37,24 @@ public static class RoutesExtensions
         })
         .WithName("GetAuctionById");
 
-        endpointRoute.MapPost("api/auctions", async (CreateAuctionDto auctionDto, AuctionDbContext context, IMapper mapper) =>
+        endpointRoute.MapPost("api/auctions", async (CreateAuctionDto auctionDto, AuctionDbContext context, IMapper mapper, IPublishEndpoint publishEndpoint) =>
         {
             var auction = mapper.Map<Auction>(auctionDto);
             auction.Seller = "test";
             context.Auctions.Add(auction);
+
+            var newAuction = mapper.Map<AuctionDto>(auction);
+            await publishEndpoint.Publish(mapper.Map<AuctionCreated>(newAuction));
+
             var result = await context.SaveChangesAsync() > 0;
 
             if (!result) return Results.BadRequest("Could not save changes to the DB");
 
-            return Results.CreatedAtRoute("GetAuctionById", new { auction.Id }, mapper.Map<AuctionDto>(auction));
+            return Results.CreatedAtRoute("GetAuctionById", new { auction.Id }, newAuction);
         })
         .WithName("CreateAuction");
 
-        endpointRoute.MapPut("api/auctions/{id}", async (Guid id, UpdateAuctionDto updateAuctionDto, AuctionDbContext context, IMapper mapper) =>
+        endpointRoute.MapPut("api/auctions/{id}", async (Guid id, UpdateAuctionDto updateAuctionDto, AuctionDbContext context, IMapper mapper, IPublishEndpoint publishEndpoint) =>
        {
            var auction = await context.Auctions
                .Include(x => x.Item)
@@ -62,6 +68,8 @@ public static class RoutesExtensions
            auction.Item.Mileage = updateAuctionDto.Mileage ?? auction.Item.Mileage;
            auction.Item.Year = updateAuctionDto.Year ?? auction.Item.Year;
 
+           await publishEndpoint.Publish(mapper.Map<AuctionUpdated>(auction));
+
            var result = await context.SaveChangesAsync() > 0;
 
            if (result) return Results.Ok();
@@ -70,7 +78,7 @@ public static class RoutesExtensions
        })
        .WithName("UpdateAuction");
 
-        endpointRoute.MapDelete("api/auctions/{id}", async (Guid id, AuctionDbContext context) =>
+        endpointRoute.MapDelete("api/auctions/{id}", async (Guid id, AuctionDbContext context, IPublishEndpoint publishEndpoint) =>
         {
             var auction = await context.Auctions
                 .FindAsync(id);
@@ -78,6 +86,7 @@ public static class RoutesExtensions
             if (auction == null) return Results.NotFound();
 
             context.Auctions.Remove(auction);
+            await publishEndpoint.Publish<AuctionDeleted>(new { Id = auction.Id.ToString() });
 
             var result = await context.SaveChangesAsync() > 0;
 
