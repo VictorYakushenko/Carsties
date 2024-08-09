@@ -4,6 +4,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Contracts;
 using MassTransit;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuctionService.Extensions;
@@ -37,10 +38,10 @@ public static class RoutesExtensions
         })
         .WithName("GetAuctionById");
 
-        endpointRoute.MapPost("api/auctions", async (CreateAuctionDto auctionDto, AuctionDbContext context, IMapper mapper, IPublishEndpoint publishEndpoint) =>
+        endpointRoute.MapPost("api/auctions", [Authorize] async (CreateAuctionDto auctionDto, AuctionDbContext context, IMapper mapper, IPublishEndpoint publishEndpoint, HttpContext httpContext) =>
         {
             var auction = mapper.Map<Auction>(auctionDto);
-            auction.Seller = "test";
+            auction.Seller = httpContext.User.Identity?.Name;
             context.Auctions.Add(auction);
 
             var newAuction = mapper.Map<AuctionDto>(auction);
@@ -52,15 +53,18 @@ public static class RoutesExtensions
 
             return Results.CreatedAtRoute("GetAuctionById", new { auction.Id }, newAuction);
         })
-        .WithName("CreateAuction");
+        .WithName("CreateAuction")
+        .RequireAuthorization();
 
-        endpointRoute.MapPut("api/auctions/{id}", async (Guid id, UpdateAuctionDto updateAuctionDto, AuctionDbContext context, IMapper mapper, IPublishEndpoint publishEndpoint) =>
+        endpointRoute.MapPut("api/auctions/{id}", [Authorize] async (Guid id, UpdateAuctionDto updateAuctionDto, AuctionDbContext context, IMapper mapper, IPublishEndpoint publishEndpoint, HttpContext httpContext) =>
        {
            var auction = await context.Auctions
                .Include(x => x.Item)
                .FirstOrDefaultAsync(x => x.Id == id);
 
            if (auction == null) return Results.NotFound();
+
+           if (auction.Seller != httpContext.User.Identity?.Name) return Results.Forbid();
 
            auction.Item.Make = updateAuctionDto.Make ?? auction.Item.Make;
            auction.Item.Model = updateAuctionDto.Model ?? auction.Item.Model;
@@ -76,14 +80,17 @@ public static class RoutesExtensions
 
            return Results.BadRequest("Problem saving changes");
        })
-       .WithName("UpdateAuction");
+       .WithName("UpdateAuction")
+       .RequireAuthorization();
 
-        endpointRoute.MapDelete("api/auctions/{id}", async (Guid id, AuctionDbContext context, IPublishEndpoint publishEndpoint) =>
+        endpointRoute.MapDelete("api/auctions/{id}", [Authorize] async (Guid id, AuctionDbContext context, IPublishEndpoint publishEndpoint, HttpContext httpContext) =>
         {
             var auction = await context.Auctions
                 .FindAsync(id);
 
             if (auction == null) return Results.NotFound();
+
+            if (auction.Seller != httpContext.User.Identity?.Name) return Results.Forbid();
 
             context.Auctions.Remove(auction);
             await publishEndpoint.Publish<AuctionDeleted>(new { Id = auction.Id.ToString() });
@@ -94,6 +101,7 @@ public static class RoutesExtensions
 
             return Results.BadRequest("Could not update DB");
         })
-        .WithName("DeleteAuction");
+        .WithName("DeleteAuction")
+        .RequireAuthorization();
     }
 }
