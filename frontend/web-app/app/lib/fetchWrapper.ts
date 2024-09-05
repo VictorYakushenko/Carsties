@@ -1,6 +1,6 @@
-import { getTokenWorkaround } from "@/app/actions/authActions";
+import { auth } from "@/auth";
 
-const baseUrl = 'http://localhost:6001/'
+const baseUrl = process.env.API_URL;
 
 async function get(url: string) {
     const requestOptions = {
@@ -45,10 +45,11 @@ async function del(url: string) {
 }
 
 async function getHeaders() {
-    const token = await getTokenWorkaround();
+    const session = await auth();
+
     const headers = { 'Content-type': 'application/json' } as any;
-    if (token) {
-        headers.Authorization = 'Bearer ' + token.access_token;
+    if (session?.accessToken) {
+        headers.Authorization = 'Bearer ' + session.accessToken;
     }
     return headers;
 }

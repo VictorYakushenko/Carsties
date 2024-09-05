@@ -1,9 +1,9 @@
 'use server'
 
 import { Auction, Bid, PagedResult } from "@/types";
-import { fetchWrapper } from "@/lib/fetchWrapper";
 import { FieldValues } from "react-hook-form";
 import { revalidatePath } from "next/cache";
+import { fetchWrapper } from "../lib/fetchWrapper";
 
 export async function getData(query: string): Promise<PagedResult<Auction>> {
     return await fetchWrapper.get(`search${query}`);

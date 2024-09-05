@@ -7,31 +7,37 @@ import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr'
 import { User } from 'next-auth'
 import { useParams } from 'next/navigation'
 import React, { ReactNode, useCallback, useEffect, useRef } from 'react'
-import AuctionCreatedToast from '../components/AuctionCreatedToast'
 import toast from 'react-hot-toast'
 import { getDetailedViewData } from '../actions/auctionActions'
 import AuctionFinishedToast from '../components/AuctionFinishedToast'
+import AuctionCreatedToast from '../components/AuctionCreatedToast'
+
 
 type Props = {
     children: ReactNode
     user: User | null
+    notifyUrl: string
 }
 
-export default function SignalRProvider({ children, user }: Props) {
+export default function SignalRProvider({ children, user, notifyUrl }: Props) {
     const connection = useRef<HubConnection | null>(null);
     const setCurrentPrice = useAuctionStore(state => state.setCurrentPrice);
     const addBid = useBidStore(state => state.addBid);
     const params = useParams<{ id: string }>();
 
-    const handleAuctionFinished = useCallback((auctionFinished: AuctionFinished) => {
-        const auction = getDetailedViewData(auctionFinished.auctionId);
-        return toast.promise(auction,
-            {
-                loading: 'Loading...',
-                success: (auction) => <AuctionFinishedToast auction={auction} auctionFinished={auctionFinished} />,
-                error: (err) => 'Auction finished'
-            }, { success: { duration: 10000, icon: null } })
+    const handleAuctionFinished = useCallback((finishedAuction: AuctionFinished) => {
+        const auction = getDetailedViewData(finishedAuction.auctionId);
+        return toast.promise(auction, {
+            loading: 'Loading',
+            success: (auction) =>
+                <AuctionFinishedToast
+                    auction={auction}
+                    auctionFinished={finishedAuction}
+                />,
+            error: (err) => 'Auction finished'
+        }, { success: { duration: 10000, icon: null } })
     }, [])
+
 
 
     const handleAuctionCreated = useCallback((auction: Auction) => {
@@ -52,25 +58,25 @@ export default function SignalRProvider({ children, user }: Props) {
     useEffect(() => {
         if (!connection.current) {
             connection.current = new HubConnectionBuilder()
-                .withUrl('http://localhost:6001/notifications')
+                .withUrl(notifyUrl)
                 .withAutomaticReconnect()
                 .build();
 
             connection.current.start()
                 .then(() => 'Connected to notification hub')
                 .catch(err => console.log(err));
-
-            connection.current.on('BidPlaced', handleBidPlaced);
-            connection.current.on('AuctionCreated', handleAuctionCreated);
-            connection.current.on('AuctionFinished', handleAuctionFinished);
-
-            return () => {
-                // connection.current?.off('BidPlaced', handleBidPlaced);
-                // connection.current?.off('AuctionCreated', handleAuctionCreated);
-                //connection.current?.off('AuctionFinished', handleAuctionFinished);
-            }
         }
-    }, [setCurrentPrice, handleBidPlaced, handleAuctionCreated, handleAuctionFinished])
+
+        connection.current.on('BidPlaced', handleBidPlaced);
+        connection.current.on('AuctionCreated', handleAuctionCreated);
+        connection.current.on('AuctionFinished', handleAuctionFinished);
+
+        return () => {
+            connection.current?.off('BidPlaced', handleBidPlaced);
+            connection.current?.off('AuctionCreated', handleAuctionCreated);
+            connection.current?.off('AuctionFinished', handleAuctionFinished);
+        }
+    }, [setCurrentPrice, handleBidPlaced, handleAuctionCreated, handleAuctionFinished, notifyUrl])
 
     return (
         children
