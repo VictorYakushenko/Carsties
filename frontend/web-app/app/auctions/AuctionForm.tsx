@@ -32,7 +32,7 @@ export default function AuctionForm({ auction }: Props) {
         try {
             let id = '';
             let res;
-            if (pathname === 'auctions/create') {
+            if (pathname === '/auctions/create') {
                 res = await createAuction(data);
                 id = res.id;
             } else {
@@ -60,7 +60,7 @@ export default function AuctionForm({ auction }: Props) {
                 <Input label='Year' name='year' control={control} type='number' rules={{ required: 'Year is required' }} />
                 <Input label='Mileage' name='mileage' control={control} type='number' rules={{ required: 'Mileage is required' }} />
             </div>
-            {pathname === 'auctions/create' &&
+            {pathname === '/auctions/create' &&
                 <>
                     <Input label='Image URL' name='imageUrl' control={control} rules={{ required: 'Image URL is required' }} />
                     <div className="grid grid-cols-2 gap-3">

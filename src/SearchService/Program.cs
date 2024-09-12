@@ -45,14 +45,9 @@ app.MapRoutes();
 
 app.Lifetime.ApplicationStarted.Register(async () =>
 {
-    try
-    {
-        await app.InitDbAsync();
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine(ex);
-    }
+    await Policy.Handle<TimeoutException>()
+        .WaitAndRetryAsync(5, retry => TimeSpan.FromSeconds(10))
+        .ExecuteAndCaptureAsync(async () => await app.InitDbAsync());
 });
 
 app.Run();
